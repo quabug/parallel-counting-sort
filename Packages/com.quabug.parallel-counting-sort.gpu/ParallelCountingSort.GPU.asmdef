@@ -1,0 +1,16 @@
+{
+    "name": "ParallelCountingSort",
+    "rootNamespace": "",
+    "references": [
+        "GUID:57f058a1c16204df3bdf7752830fc875"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

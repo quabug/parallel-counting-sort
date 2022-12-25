@@ -1,0 +1,37 @@
+#define THREAD_SIZE 256
+
+StructuredBuffer<int> ItemBinIndices;
+RWStructuredBuffer<int> BinItemCounts;
+RWStructuredBuffer<int> BinPrefixSum;
+RWStructuredBuffer<int> SortedItemBinIndices;
+
+uint ItemCount;
+
+#pragma kernel ClearBinCounts // loop bins
+[numthreads(THREAD_SIZE,1,1)]
+void ClearBinCounts(uint3 id : SV_DispatchThreadID)
+{
+    BinItemCounts[id.x] = 0;
+}
+
+#pragma kernel Count // loop items
+[numthreads(THREAD_SIZE,1,1)]
+void Count(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= ItemCount) return;
+    const int binIndex = ItemBinIndices[id.x];
+    InterlockedAdd(BinItemCounts[binIndex], 1);
+}
+
+#pragma kernel Sort // loop items
+[numthreads(THREAD_SIZE,1,1)]
+void Sort(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= ItemCount) return;
+    const int index = id.x;
+    const int binIndex = ItemBinIndices[index];
+    int sortedIndex;
+    InterlockedAdd(BinPrefixSum[binIndex], -1, sortedIndex);
+    sortedIndex--;
+    SortedItemBinIndices[index] = sortedIndex;
+}
