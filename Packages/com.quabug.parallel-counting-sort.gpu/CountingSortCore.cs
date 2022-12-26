@@ -37,6 +37,7 @@ namespace Parallel.GPU
             NumbersBuffer = new ComputeBuffer(itemCount, UnsafeUtility.SizeOf<int>(), ComputeBufferType.Structured);
 
             shader.SetInt("ItemCount", itemCount);
+            shader.SetInt("BinCount", binCount);
 
             // clear kernel
             shader.SetBuffer(_clearBinCountsKernelIndex, "NumberCounts", NumberCountsBuffer);
@@ -49,10 +50,6 @@ namespace Parallel.GPU
             shader.SetBuffer(_sortKernelIndex, "Numbers", NumbersBuffer);
             shader.SetBuffer(_sortKernelIndex, "SortedIndices", SortedIndicesBuffer);
             shader.SetBuffer(_sortKernelIndex, "NumberPrefixSum", NumberPrefixSumsBuffer);
-
-            using var zeros = new NativeArray<int>(itemCount, Allocator.Temp);
-            SortedIndicesBuffer.SetData(zeros);
-            NumbersBuffer.SetData(zeros);
         }
 
         public void Dispatch()

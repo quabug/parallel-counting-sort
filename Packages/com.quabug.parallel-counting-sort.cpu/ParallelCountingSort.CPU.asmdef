@@ -1,0 +1,17 @@
+{
+    "name": "ParallelCountingSort.CPU",
+    "rootNamespace": "",
+    "references": [
+        "GUID:93d37d391610a4e9ab4e3bf471c1d4f7",
+        "GUID:2665a8d13d1b3f18800f46e256720795"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": true,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
