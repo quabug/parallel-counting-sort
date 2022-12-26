@@ -7,7 +7,8 @@
         "Unity.PerformanceTesting",
         "ParallelCountingSort.CPU",
         "ParallelPrefixSum.CPU",
-        "Unity.Collections"
+        "Unity.Collections",
+        "Unity.Burst"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

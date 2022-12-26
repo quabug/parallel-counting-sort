@@ -5,7 +5,7 @@
   "description": "Parallel Counting Sort (DOTS)",
   "type": "library",
   "dependencies": {
-    "com.quabug.parallel-prefix-sum.cpu": "1.0.1",
+    "com.quabug.parallel-prefix-sum.cpu": "1.0.2",
     "com.unity.burst": "1.8.2"
   }
 }

@@ -7,18 +7,28 @@ using Unity.Jobs;
 
 namespace Parallel.CPU
 {
-    public class CountingSort
+    public static class CountingSortExtension
     {
-        private readonly IPrefixSum<int> _prefixSum;
-
-        public CountingSort(IPrefixSum<int> prefixSum)
-        {
-            _prefixSum = prefixSum;
-        }
-    
-        public Handle Schedule<TBinItems, TSortableData>(ref TBinItems binItems, ref TSortableData sortableData)
+        public static Handle CountingSort<TBinItems, TSortableData>(
+            this ref TSortableData sortableData,
+            ref TBinItems binItems,
+            int batchCount = 32
+        )
             where TBinItems : struct, IBinItems
             where TSortableData : struct, ISortableData
+        {
+            return sortableData.CountingSort(ref binItems, new SingleThreadPrefixSum<IntNumber, int>(), batchCount);
+        }
+
+        public static Handle CountingSort<TBinItems, TSortableData, TPrefixSum>(
+            this ref TSortableData sortableData,
+            ref TBinItems binItems,
+            TPrefixSum prefixSumJob,
+            int batchCount = 32
+        )
+            where TBinItems : struct, IBinItems
+            where TSortableData : struct, ISortableData
+            where TPrefixSum : struct, IPrefixSum<int>
         {
             var itemBinIndices = new NativeArray<int>(binItems.ItemCount, Allocator.TempJob, NativeArrayOptions.UninitializedMemory);
             var binItemCounts = new NativeArray<int>(binItems.BinCount, Allocator.TempJob, NativeArrayOptions.ClearMemory);
@@ -28,22 +38,22 @@ namespace Parallel.CPU
             {
                 BinItems = binItems,
                 ItemBinIndices = itemBinIndices
-            }.Schedule(itemBinIndices.Length, 8);
+            }.Schedule(itemBinIndices.Length, batchCount);
 
-            var countJobHandle = new CountJob()
+            var countJobHandle = new CountJob
             {
                 ItemBinIndices = itemBinIndices,
                 BinItemCounts = binItemCounts
-            }.Schedule(itemBinIndices.Length, 8, itemToBinIndexJobHandle);
+            }.Schedule(itemBinIndices.Length, batchCount, itemToBinIndexJobHandle);
 
-            var prefixSumJobHandle = _prefixSum.CalculatePrefixSum(binItemCounts, prefixSum, countJobHandle);
+            var prefixSumJobHandle = prefixSumJob.CalculatePrefixSum(binItemCounts, prefixSum, countJobHandle);
 
-            var countingSortJobHandle = new CountingSortJob<TSortableData>()
+            var countingSortJobHandle = new CountingSortJob<TSortableData>
             {
                 BinPrefixSum = prefixSum,
                 Data = sortableData,
                 ItemBinIndices = itemBinIndices
-            }.Schedule(itemBinIndices.Length, 8, prefixSumJobHandle);
+            }.Schedule(itemBinIndices.Length, batchCount, prefixSumJobHandle);
 
             var handles = new NativeArray<JobHandle>(4, Allocator.Temp);
             handles[0] = itemToBinIndexJobHandle;
@@ -127,6 +137,19 @@ namespace Parallel.CPU
                 InputItemBinIndices.Dispose();
                 BinItemCounts.Dispose();
                 ItemPrefixSum.Dispose();
+            }
+        }
+    
+        public struct IntNumber : INumber<int>
+        {
+            public int Zero()
+            {
+                return 0;
+            }
+
+            public int Add(int lhs, int rhs)
+            {
+                return lhs + rhs;
             }
         }
     }
