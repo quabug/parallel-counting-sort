@@ -1,87 +1,55 @@
 using System;
-using Unity.Collections.LowLevel.Unsafe;
 using UnityEngine;
 
 namespace Parallel.GPU
 {
-    public class CountingSort : IDisposable
+    [CreateAssetMenu(fileName = "CountingSort", menuName = "Parallel/GPU-CountingSort", order = 0)]
+    public class CountingSort : ScriptableObject
     {
-        private readonly IPrefixSum _prefixSum;
-        private readonly ComputeShader _shader;
-    
-        private readonly int _clearBinCountsKernelThreadGroup;
-        private readonly int _clearBinCountsKernelIndex;
+        [SerializeField] private int _itemCount = 512;
+        [SerializeField] private int _binCount = 64;
+        [SerializeField] private ComputeShader _countingSortShader;
+        [SerializeField] private PrefixSum _prefixSum;
 
-        private readonly int _countKernelThreadGroup;
-        private readonly int _countKernelIndex;
+        private Lazy<CountingSortCore> _countingSort;
 
-        private readonly int _sortKernelIndex;
-        private readonly int _sortKernelThreadGroup;
+        public ComputeBuffer SortedIndicesBuffer => _countingSort.Value.SortedIndicesBuffer;
+        public ComputeBuffer NumbersBuffer => _countingSort.Value.NumbersBuffer;
 
-        internal ComputeBuffer BinItemCountsBuffer => _prefixSum.Numbers;
-        internal ComputeBuffer BinPrefixSumsBuffer => _prefixSum.PrefixSums;
-        internal ComputeBuffer SortedItemBinIndicesBuffer { get; }
-
-        public CountingSort(ComputeShader shader, IPrefixSum prefixSum, ComputeBuffer itemBinIndicesBuffer, int binCount)
+        public CountingSort()
         {
-            _prefixSum = prefixSum;
-            _shader = shader;
-            var itemCount = itemBinIndicesBuffer.count;
-
-            (_clearBinCountsKernelIndex, _clearBinCountsKernelThreadGroup) = shader.GetKernelAndThreadGroup("ClearBinCounts", binCount);
-            (_countKernelIndex, _countKernelThreadGroup) = shader.GetKernelAndThreadGroup("Count", itemCount);
-            (_sortKernelIndex, _sortKernelThreadGroup) = shader.GetKernelAndThreadGroup("Sort", itemCount);
-
-            SortedItemBinIndicesBuffer = new ComputeBuffer(itemCount, UnsafeUtility.SizeOf<int>(), ComputeBufferType.Structured);
-
-            shader.SetInt("ItemCount", itemCount);
-
-            // clear kernel
-            shader.SetBuffer(_clearBinCountsKernelIndex, "BinItemCounts", BinItemCountsBuffer);
-
-            // count kernel
-            shader.SetBuffer(_countKernelIndex, "ItemBinIndices", itemBinIndicesBuffer);
-            shader.SetBuffer(_countKernelIndex, "BinItemCounts", BinItemCountsBuffer);
-
-            // sort kernel
-            shader.SetBuffer(_sortKernelIndex, "ItemBinIndices", itemBinIndicesBuffer);
-            shader.SetBuffer(_sortKernelIndex, "SortedItemBinIndices", SortedItemBinIndicesBuffer);
-            shader.SetBuffer(_sortKernelIndex, "BinPrefixSum", BinPrefixSumsBuffer);
+            _countingSort = new Lazy<CountingSortCore>(() =>
+                new CountingSortCore(_countingSortShader, _prefixSum, _itemCount, _binCount));
         }
 
-        public void Dispatch()
+        public void SetItemCount(int itemCount)
         {
-            DispatchClearBinCounts();
-            DispatchCount();
-            DispatchSum();
-            DispatchSort();
+            SetCounts(itemCount, _binCount);
         }
 
-        internal void DispatchClearBinCounts()
+        public void SetBinCount(int binCount)
         {
-            _shader.Dispatch(_clearBinCountsKernelIndex, _clearBinCountsKernelThreadGroup, 1, 1);
+            SetCounts(_itemCount, binCount);
         }
 
-        internal void DispatchCount()
+        public void SetCounts(int itemCount, int binCount)
         {
-            _shader.Dispatch(_countKernelIndex, _countKernelThreadGroup, 1, 1);
+            OnDestroy();
+            _itemCount = itemCount;
+            _binCount = binCount;
+            _countingSort = new Lazy<CountingSortCore>(() =>
+                new CountingSortCore(_countingSortShader, _prefixSum, _itemCount, _binCount));
         }
 
-        internal void DispatchSum()
+        public void Sort()
         {
-            _prefixSum.Dispatch();
+            _countingSort.Value.Dispatch();
         }
 
-        internal void DispatchSort()
+        private void OnDestroy()
         {
-            _shader.Dispatch(_sortKernelIndex, _sortKernelThreadGroup, 1, 1);
-        }
-
-        public void Dispose()
-        {
-            BinItemCountsBuffer?.Dispose();
-            BinPrefixSumsBuffer?.Dispose();
-            SortedItemBinIndicesBuffer?.Dispose();
+            if (_countingSort.IsValueCreated)
+                _countingSort.Value.Dispose();
         }
     }
 }

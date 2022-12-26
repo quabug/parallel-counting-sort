@@ -1,13 +1,13 @@
 using System.Linq;
 using NUnit.Framework;
 using Parallel.GPU;
-using Unity.Collections.LowLevel.Unsafe;
 using UnityEditor;
 using UnityEngine;
 
+[Category("gpu")]
 public class TestCountingSort_GPU
 {
-    private (CountingSort sort, int[] items, int[] counts, int[] sums, int[] sorted, ComputeBuffer numbersBuffer) RandomNumbersAndSums(int seed)
+    private (CountingSortCore sort, SingleThreadPrefixSum prefixSum, int[] items, int[] counts, int[] sums, int[] sorted) RandomNumbersAndSums(int seed)
     {
         var random = new System.Random(seed);
         var itemCount = random.Next(100, 1000);
@@ -35,66 +35,84 @@ public class TestCountingSort_GPU
 
         sums[0] = counts[0];
         for (var i = 1; i < binCount; i++) sums[i] = sums[i-1]+counts[i];
-        var buffer = new ComputeBuffer(items.Length, UnsafeUtility.SizeOf<int>(), ComputeBufferType.Structured);
-        buffer.SetData(items);
         var shader = AssetDatabase.LoadAssetAtPath<ComputeShader>("Packages/com.quabug.parallel-counting-sort.gpu/CountingSort.compute");
-        var prefixSum = AssetDatabase.LoadAssetAtPath<ComputeShader>("Packages/com.quabug.parallel-prefix-sum.gpu/SingleThreadPrefixSum_int.compute");
-        var sort = new CountingSort(shader, new SingleThreadPrefixSum(prefixSum, binCount, 4), buffer, binCount);
-        return (sort, items, counts, sums, sorted, buffer);
+        var prefixSumShader = AssetDatabase.LoadAssetAtPath<ComputeShader>("Packages/com.quabug.parallel-prefix-sum.gpu/SingleThreadPrefixSum_int.compute");
+        var prefixSum = new SingleThreadPrefixSum(prefixSumShader, binCount, 4);
+        var sort = new CountingSortCore(shader, prefixSum, itemCount, binCount);
+        sort.NumbersBuffer.SetData(items);
+        return (sort, prefixSum, items, counts, sums, sorted);
     }
+
+    // must initialize compute buffer before dispatch
+    // otherwise this test case will failed because of strange behavior
+    // that clear stage will clean up `NumberCountsBuffer` instead of `NumbersBuffer`
+    [Test]
+    public void should_count_items_548()
+    {
+        var (sort, prefixSum, items, counts, sums, sorted) = RandomNumbersAndSums(548);
+        var binItemCounts = new int[counts.Length];
+        sort.DispatchClearBinCounts();
+        sort.DispatchCount();
+        sort.NumberCountsBuffer.GetData(binItemCounts);
+        Assert.That(binItemCounts.Sum(n => n), Is.EqualTo(items.Length));
+        Assert.That(counts, Is.EquivalentTo(binItemCounts));
+        sort.Dispose();
+        prefixSum.Dispose();
+    }
+
 
     [Test]
     public void should_count_items([Random(0, 1000, 100)] int seed)
     {
-        var (sort, items, counts, sums, sorted, buffer) = RandomNumbersAndSums(seed);
+        var (sort, prefixSum, items, counts, sums, sorted) = RandomNumbersAndSums(seed);
         sort.DispatchClearBinCounts();
         sort.DispatchCount();
         var binItemCounts = new int[counts.Length];
-        sort.BinItemCountsBuffer.GetData(binItemCounts);
+        sort.NumberCountsBuffer.GetData(binItemCounts);
         Assert.That(binItemCounts.Sum(n => n), Is.EqualTo(items.Length));
         Assert.That(counts, Is.EquivalentTo(binItemCounts));
         sort.Dispose();
-        buffer.Dispose();
+        prefixSum.Dispose();
     }
 
     [Test]
     public void should_sum_prefix([Random(0, 1000, 100)] int seed)
     {
-        var (sort, items, counts, sums, sorted, buffer) = RandomNumbersAndSums(seed);
+        var (sort, prefixSum, items, counts, sums, sorted) = RandomNumbersAndSums(seed);
         sort.DispatchClearBinCounts();
         sort.DispatchCount();
         sort.DispatchSum();
         var binPrefixSums = new int[sums.Length];
-        sort.BinPrefixSumsBuffer.GetData(binPrefixSums);
+        sort.NumberPrefixSumsBuffer.GetData(binPrefixSums);
         Assert.That(sums, Is.EquivalentTo(binPrefixSums));
         sort.Dispose();
-        buffer.Dispose();
+        prefixSum.Dispose();
     }
 
     [Test]
     public void should_sort([Random(0, 1000, 100)] int seed)
     {
-        var (sort, items, counts, sums, sorted, buffer) = RandomNumbersAndSums(seed);
+        var (sort, prefixSum, items, counts, sums, sorted) = RandomNumbersAndSums(seed);
         sort.DispatchClearBinCounts();
         sort.DispatchCount();
         sort.DispatchSum();
         sort.DispatchSort();
         var sortedItems = new int[sorted.Length];
-        sort.SortedItemBinIndicesBuffer.GetData(sortedItems);
+        sort.SortedIndicesBuffer.GetData(sortedItems);
         Assert.That(sorted, Is.EquivalentTo(sortedItems));
         sort.Dispose();
-        buffer.Dispose();
+        prefixSum.Dispose();
     }
 
     [Test]
     public void should_sort_multiple_times([Random(0, 1000, 10)] int seed)
     {
-        var (sort, items, counts, sums, sorted, buffer) = RandomNumbersAndSums(seed);
+        var (sort, prefixSum, items, counts, sums, sorted) = RandomNumbersAndSums(seed);
         for (var i = 0; i < 100; i++) sort.Dispatch();
         var sortedItems = new int[sorted.Length];
-        sort.SortedItemBinIndicesBuffer.GetData(sortedItems);
+        sort.SortedIndicesBuffer.GetData(sortedItems);
         Assert.That(sorted, Is.EquivalentTo(sortedItems));
         sort.Dispose();
-        buffer.Dispose();
+        prefixSum.Dispose();
     }
 }
