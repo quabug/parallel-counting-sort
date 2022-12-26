@@ -1,0 +1,10 @@
+{
+  "name": "com.quabug.parallel-counting-sort.gpu",
+  "version": "1.0.0",
+  "displayName": "Parallel Counting Sort (Compute Shader)",
+  "description": "Parallel Counting Sort (Compute Shader)",
+  "type": "library",
+  "dependencies": {
+    "com.quabug.parallel-prefix-sum.gpu": "1.1.2"
+  }
+}
