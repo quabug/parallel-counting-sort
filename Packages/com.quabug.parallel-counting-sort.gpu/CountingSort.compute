@@ -6,11 +6,13 @@ RWStructuredBuffer<int> NumberPrefixSum;
 RWStructuredBuffer<int> SortedIndices;
 
 uint ItemCount;
+uint BinCount;
 
 #pragma kernel ClearBinCounts // loop bins
 [numthreads(THREAD_SIZE,1,1)]
 void ClearBinCounts(uint3 id : SV_DispatchThreadID)
 {
+    if (id.x >= BinCount) return;
     NumberCounts[id.x] = 0;
 }
 

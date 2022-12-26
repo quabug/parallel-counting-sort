@@ -15,7 +15,6 @@ public class TestCountingSort_GPU
         var items = new int[itemCount];
         var counts = new int[binCount];
         var sums = new int[binCount];
-        var sorted = new int[itemCount];
         for (var i = 0; i < itemCount; i++)
         {
             var bin = random.Next(binCount);
@@ -25,14 +24,7 @@ public class TestCountingSort_GPU
         
         Debug.Log($"itemCount = {itemCount}({counts.Sum()})");
 
-        foreach (var (origin, newIndex) in items
-                     .Select((item, index) => (item, index))
-                     .OrderBy(t => t.item)
-                     .Select((t, i) => (t.index, sorted: i)))
-        {
-            sorted[origin] = newIndex;
-        }
-
+        var sorted = items.OrderBy(i => i).ToArray();
         sums[0] = counts[0];
         for (var i = 1; i < binCount; i++) sums[i] = sums[i-1]+counts[i];
         var shader = AssetDatabase.LoadAssetAtPath<ComputeShader>("Packages/com.quabug.parallel-counting-sort.gpu/CountingSort.compute");
@@ -43,24 +35,6 @@ public class TestCountingSort_GPU
         return (sort, prefixSum, items, counts, sums, sorted);
     }
 
-    // must initialize compute buffer before dispatch
-    // otherwise this test case will failed because of strange behavior
-    // that clear stage will clean up `NumberCountsBuffer` instead of `NumbersBuffer`
-    [Test]
-    public void should_count_items_548()
-    {
-        var (sort, prefixSum, items, counts, sums, sorted) = RandomNumbersAndSums(548);
-        var binItemCounts = new int[counts.Length];
-        sort.DispatchClearBinCounts();
-        sort.DispatchCount();
-        sort.NumberCountsBuffer.GetData(binItemCounts);
-        Assert.That(binItemCounts.Sum(n => n), Is.EqualTo(items.Length));
-        Assert.That(counts, Is.EquivalentTo(binItemCounts));
-        sort.Dispose();
-        prefixSum.Dispose();
-    }
-
-
     [Test]
     public void should_count_items([Random(0, 1000, 100)] int seed)
     {
@@ -70,7 +44,7 @@ public class TestCountingSort_GPU
         var binItemCounts = new int[counts.Length];
         sort.NumberCountsBuffer.GetData(binItemCounts);
         Assert.That(binItemCounts.Sum(n => n), Is.EqualTo(items.Length));
-        Assert.That(counts, Is.EquivalentTo(binItemCounts));
+        Assert.That(counts, Is.EqualTo(binItemCounts));
         sort.Dispose();
         prefixSum.Dispose();
     }
@@ -84,7 +58,7 @@ public class TestCountingSort_GPU
         sort.DispatchSum();
         var binPrefixSums = new int[sums.Length];
         sort.NumberPrefixSumsBuffer.GetData(binPrefixSums);
-        Assert.That(sums, Is.EquivalentTo(binPrefixSums));
+        Assert.That(sums, Is.EqualTo(binPrefixSums));
         sort.Dispose();
         prefixSum.Dispose();
     }
@@ -97,9 +71,14 @@ public class TestCountingSort_GPU
         sort.DispatchCount();
         sort.DispatchSum();
         sort.DispatchSort();
-        var sortedItems = new int[sorted.Length];
-        sort.SortedIndicesBuffer.GetData(sortedItems);
-        Assert.That(sorted, Is.EquivalentTo(sortedItems));
+        var sortedIndices = new int[sorted.Length];
+        sort.SortedIndicesBuffer.GetData(sortedIndices);
+        var sortedNumbers = new int[sorted.Length];
+        for (var i = 0; i < sortedNumbers.Length; i++)
+        {
+            sortedNumbers[sortedIndices[i]] = items[i];
+        }
+        Assert.That(sorted, Is.EqualTo(sortedNumbers));
         sort.Dispose();
         prefixSum.Dispose();
     }
@@ -109,9 +88,14 @@ public class TestCountingSort_GPU
     {
         var (sort, prefixSum, items, counts, sums, sorted) = RandomNumbersAndSums(seed);
         for (var i = 0; i < 100; i++) sort.Dispatch();
-        var sortedItems = new int[sorted.Length];
-        sort.SortedIndicesBuffer.GetData(sortedItems);
-        Assert.That(sorted, Is.EquivalentTo(sortedItems));
+        var sortedIndices = new int[sorted.Length];
+        sort.SortedIndicesBuffer.GetData(sortedIndices);
+        var sortedNumbers = new int[sorted.Length];
+        for (var i = 0; i < sortedNumbers.Length; i++)
+        {
+            sortedNumbers[sortedIndices[i]] = items[i];
+        }
+        Assert.That(sorted, Is.EqualTo(sortedNumbers));
         sort.Dispose();
         prefixSum.Dispose();
     }

@@ -1,0 +1,11 @@
+{
+  "name": "com.quabug.parallel-counting-sort.cpu",
+  "version": "1.0.0",
+  "displayName": "Parallel Counting Sort (DOTS)",
+  "description": "Parallel Counting Sort (DOTS)",
+  "type": "library",
+  "dependencies": {
+    "com.quabug.parallel-prefix-sum.cpu": "1.0.1",
+    "com.unity.burst": "1.8.2"
+  }
+}
